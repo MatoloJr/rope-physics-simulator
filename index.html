@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rope Physics · Verlet Integration</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<div id="top-label">Verlet Integration · <span>Rope Sim</span></div>
+
+<div id="tip">
+  move mouse to attract ropes<br>
+  click to scatter burst<br>
+  R to reset
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="controls">
+  <button class="ctrl-btn" id="btn-gravity" title="Toggle gravity">↓</button>
+  <button class="ctrl-btn active" id="btn-mouse" title="Toggle mouse force">⊙</button>
+  <button class="ctrl-btn" id="btn-wind" title="Toggle wind">≋</button>
+  <button class="ctrl-btn" id="btn-reset" title="Reset">↺</button>
+</div>
+
+<div id="stats-bar">
+  <div class="stat">
+    <span class="stat-label">nodes</span>
+    <span class="stat-val" id="st-nodes">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">ropes</span>
+    <span class="stat-val" id="st-ropes">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">fps</span>
+    <span class="stat-val" id="st-fps">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">force</span>
+    <span class="stat-val" id="st-force">0.00</span>
+    <div id="force-bar-wrap"><div id="force-bar-fill"></div></div>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
