@@ -183,20 +183,27 @@ class Rope {
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
-// Rope parameters segments × segLen determines total rope length
-// Longer ropes: 26 segments × 28px = 728px max hang
 const ROPE_COUNT_DESKTOP = 34;
-const ROPE_COUNT_MOBILE  = 20;   // fewer ropes on small screens for perf
-const SEG_LEN            = 28;   // pixels per segment (increased from 18)
-const SEG_COUNT          = 26;   // segments per rope  (increased from 14)
+const ROPE_COUNT_MOBILE  = 20;
+const SEG_COUNT          = 26;   // segments per rope
+
+// Dynamic segment length computed in computeSegLen()
+// Target: rope hangs to ~72% of screen height when at rest
+// Total rope length = SEG_COUNT * SEG_LEN
+// So SEG_LEN = (H * 0.72) / SEG_COUNT
+function computeSegLen(screenH) {
+  const targetLength = screenH * 0.72;
+  return Math.max(12, Math.round(targetLength / SEG_COUNT));
+}
 
 let W, H, ropes  = [];
 let ROPE_COUNT   = ROPE_COUNT_DESKTOP;
+let SEG_LEN      = 28; // will be recalculated on resize
 
 // Pointer state shared between mouse and touch
 let pointer = {
   pos:    new Vec2(-9999, -9999),
-  radius: 130,   // influence zone radius in screen pixels
+  radius: 130,
   active: false
 };
 
@@ -210,6 +217,7 @@ let isTouchDevice = false;
 function buildRopes() {
   ropes = [];
   ROPE_COUNT = window.innerWidth <= 768 ? ROPE_COUNT_MOBILE : ROPE_COUNT_DESKTOP;
+  SEG_LEN    = computeSegLen(H);
 
   for (let i = 0; i < ROPE_COUNT; i++) {
     const x = (i / (ROPE_COUNT - 1)) * W;
@@ -260,14 +268,7 @@ window.addEventListener('keydown', e => {
 });
 
 //  TOUCH EVENTS
-
-/**
- * Touch translates directly to the shared pointer object
- * so the same Verlet force logic applies unchanged.
- * Multi-touch: we only track the first active touch.
- */
 function getTouchPos(touch) {
-  // clientX/Y gives CSS pixel coords (correct even on HiDPI)
   return { x: touch.clientX, y: touch.clientY };
 }
 
@@ -291,7 +292,6 @@ canvas.addEventListener('touchmove', e => {
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
   if (e.touches.length === 0) {
-    // Finger lifted fire scatter burst at last position, then deactivate
     scatterBurst(pointer.pos.x, pointer.pos.y);
     pointer.active = false;
   }
@@ -321,46 +321,86 @@ function scatterBurst(cx, cy) {
   }
 }
 
-//  CONTROLS
+//  CONTROLS desktop sidebar
 document.getElementById('btn-gravity').addEventListener('click', function () {
   useGravity = !useGravity;
   this.classList.toggle('active', useGravity);
+  // keep mobile panel in sync
+  document.getElementById('mob-btn-gravity').classList.toggle('active', useGravity);
 });
 
 document.getElementById('btn-mouse').addEventListener('click', function () {
   useMouseForce = !useMouseForce;
   this.classList.toggle('active', useMouseForce);
+  document.getElementById('mob-btn-mouse').classList.toggle('active', useMouseForce);
 });
 
 document.getElementById('btn-wind').addEventListener('click', function () {
   windTarget = windTarget === 0 ? 0.55 : 0;
   this.classList.toggle('active', windTarget !== 0);
+  document.getElementById('mob-btn-wind').classList.toggle('active', windTarget !== 0);
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => buildRopes());
 
-// Set initial active states
+// Set initial active states on desktop
 document.getElementById('btn-gravity').classList.toggle('active', useGravity);
 document.getElementById('btn-mouse').classList.toggle('active', useMouseForce);
+
+//  MOBILE PANEL CONTROLS
+const mobPanel      = document.getElementById('mob-panel');
+const mobToggleBtn  = document.getElementById('mob-toggle');
+
+mobToggleBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const open = mobPanel.classList.toggle('open');
+  mobToggleBtn.classList.toggle('active', open);
+});
+
+// Close panel when tapping outside
+document.addEventListener('click', e => {
+  if (!mobPanel.contains(e.target) && e.target !== mobToggleBtn) {
+    mobPanel.classList.remove('open');
+    mobToggleBtn.classList.remove('active');
+  }
+});
+
+document.getElementById('mob-btn-gravity').addEventListener('click', function () {
+  useGravity = !useGravity;
+  this.classList.toggle('active', useGravity);
+  document.getElementById('btn-gravity').classList.toggle('active', useGravity);
+});
+
+document.getElementById('mob-btn-mouse').addEventListener('click', function () {
+  useMouseForce = !useMouseForce;
+  this.classList.toggle('active', useMouseForce);
+  document.getElementById('btn-mouse').classList.toggle('active', useMouseForce);
+});
+
+document.getElementById('mob-btn-wind').addEventListener('click', function () {
+  windTarget = windTarget === 0 ? 0.55 : 0;
+  this.classList.toggle('active', windTarget !== 0);
+  document.getElementById('btn-wind').classList.toggle('active', windTarget !== 0);
+});
+
+document.getElementById('mob-btn-reset').addEventListener('click', () => buildRopes());
+
+// Sync initial mobile states
+document.getElementById('mob-btn-gravity').classList.toggle('active', useGravity);
+document.getElementById('mob-btn-mouse').classList.toggle('active', useMouseForce);
 
 //  RENDER LOOP
 let lastTime     = 0;
 let fps          = 60;
-let currentForce = 0;   // smoothed peak force this frame (unit: px/r, 0–1)
+let currentForce = 0;
 
 function frame(ts) {
   const dt = ts - lastTime || 16;
   lastTime = ts;
 
-  // Exponential moving average for stable FPS readout
   fps = fps * 0.92 + (1000 / dt) * 0.08;
-
-  // Smoothly ramp wind
   wind += (windTarget - wind) * 0.018;
 
-  // Compute peak force this frame
-  // Force formula:  f = max( (R – d) / R, 0 )
-  // Unit: px/r  (dimensionless proximity fraction, 0 = edge, 1 = centre)
   let maxForce = 0;
   if (pointer.active && useMouseForce) {
     for (const rope of ropes) {
@@ -374,20 +414,16 @@ function frame(ts) {
       }
     }
   }
-  // Smooth the displayed value so it doesn't jitter
   currentForce = currentForce * 0.82 + maxForce * 0.18;
 
-  // Draw
   ctx.clearRect(0, 0, W, H);
 
-  // Subtle top vignette
   const bg = ctx.createLinearGradient(0, 0, 0, H * 0.45);
   bg.addColorStop(0, 'rgba(14,14,18,0.55)');
   bg.addColorStop(1, 'rgba(13,13,15,0)');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Rope render style
   ctx.strokeStyle = 'rgba(220,215,200,0.62)';
   ctx.lineWidth   = 1.15;
   ctx.lineCap     = 'round';
@@ -398,7 +434,6 @@ function frame(ts) {
     rope.draw(ctx);
   }
 
-  // Influence-zone ring around pointer
   if (pointer.active) {
     ctx.beginPath();
     ctx.arc(pointer.pos.x, pointer.pos.y, pointer.radius, 0, Math.PI * 2);
@@ -407,19 +442,14 @@ function frame(ts) {
     ctx.stroke();
   }
 
-  // Update HUD
   document.getElementById('st-nodes').textContent = ROPE_COUNT * (SEG_COUNT + 1);
   document.getElementById('st-ropes').textContent = ROPE_COUNT;
   document.getElementById('st-fps').textContent   = Math.round(fps);
-
-  // Force: displayed as normalised scalar (0.00 – 1.00, unit = px/r)
   document.getElementById('st-force').textContent = currentForce.toFixed(2);
 
-  // Force bar
   const pct  = Math.min(currentForce * 100, 100);
   const fill = document.getElementById('force-bar-fill');
   fill.style.width = pct + '%';
-  // Bar turns red above the snap threshold (0.6)
   fill.style.background = currentForce > 0.6
     ? 'linear-gradient(90deg, #e05252, #ff8080)'
     : 'linear-gradient(90deg, #c8a84b, #e8c96a)';

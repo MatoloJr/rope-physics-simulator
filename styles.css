@@ -22,14 +22,12 @@ html, body {
   background: var(--bg);
   overflow: hidden;
   font-family: 'JetBrains Mono', monospace;
-  /* cursor: none on non-touch; overridden for touch below */
   cursor: none;
-  /* Safe area insets for notched phones */
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* CUSTOM CURSOR  (hidden on touch via @media) */
+/* CUSTOM CURSOR */
 #cursor {
   position: fixed;
   width: 12px;
@@ -62,7 +60,7 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
-  touch-action: none; /* prevent scroll hijack on mobile */
+  touch-action: none;
 }
 
 /* TOP LABEL */
@@ -94,11 +92,10 @@ canvas {
   line-height: 1.9;
 }
 
-/* show only the relevant hint per input method */
 .tip-touch { display: none; }
 .tip-mouse { display: block; }
 
-/* CONTROLS SIDEBAR */
+/* CONTROLS SIDEBAR (desktop only) */
 #controls {
   position: fixed;
   top: 50%;
@@ -125,7 +122,6 @@ canvas {
   align-items: center;
   justify-content: center;
   transition: border-color 0.2s, color 0.2s, background 0.2s;
-  /* bigger tap target on mobile */
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
@@ -150,7 +146,6 @@ canvas {
   overflow: hidden;
   pointer-events: none;
   z-index: 10;
-  /* prevent bar from overflowing on small screens */
   max-width: calc(100vw - 40px);
 }
 
@@ -185,7 +180,6 @@ canvas {
   white-space: nowrap;
 }
 
-/* Unit label below the force value */
 .stat-unit {
   font-size: 8px;
   color: var(--text-dim);
@@ -193,7 +187,6 @@ canvas {
   margin-top: 1px;
 }
 
-/* Force progress bar */
 #force-bar-wrap {
   width: 56px;
   height: 3px;
@@ -211,18 +204,101 @@ canvas {
   transition: width 0.06s linear, background 0.15s;
 }
 
-/* RESPONSIVE — TABLET  (≤ 768px) */
+/* MOBILE CONTROLS CELL (hidden on desktop) */
+.mob-controls-cell {
+  display: none;   /* shown only in mobile media query */
+  pointer-events: all;
+  padding: 0 14px;
+}
+
+/* Dot-grid toggle button */
+#mob-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+#mob-toggle.active {
+  border-color: var(--accent);
+  background: rgba(200, 168, 75, 0.12);
+}
+
+/* 3×3 dot grid */
+.dot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  grid-template-rows: repeat(3, 4px);
+  gap: 3px;
+}
+
+.dot-grid span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-mid);
+  transition: background 0.2s;
+  display: block;
+}
+
+#mob-toggle.active .dot-grid span {
+  background: var(--accent);
+}
+
+/* MOBILE POPOVER PANEL */
+#mob-panel {
+  display: none;          /* shown only in mobile media query */
+  position: fixed;
+  z-index: 20;
+  flex-direction: row;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--ui-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+
+  /* positioned above the stats bar; JS-free approach: anchored via CSS */
+  bottom: 82px;          /* sits above the stats bar (~58px tall + 24px gap) */
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+#mob-panel.open {
+  opacity: 1;
+  pointer-events: all;
+  transform: translateX(-50%) translateY(0);
+}
+
+#mob-panel .ctrl-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+  border-radius: 12px;
+}
+
+/* RESPONSIVE TABLET (≤ 768px) */
 @media (max-width: 768px) {
-  /* Restore normal cursor on touch */
   html, body { cursor: auto; }
 
   #cursor, #cursor-ring { display: none; }
 
-  /* Swap hint text */
   .tip-mouse { display: none; }
   .tip-touch { display: block; }
 
-  /* Move tip below label so they don't collide */
   #tip {
     top: auto;
     bottom: 100px;
@@ -232,28 +308,18 @@ canvas {
 
   #top-label { font-size: 10px; left: 14px; top: 12px; }
 
-  /* Shift controls to bottom-right corner on mobile */
-  #controls {
-    top: auto;
-    bottom: 96px;
-    right: 14px;
-    transform: none;
-    flex-direction: row;
-    gap: 8px;
-  }
+  /* Hide desktop sidebar on mobile */
+  #controls { display: none; }
 
-  .ctrl-btn {
-    width: 44px;
-    height: 44px;
-    font-size: 17px;
-    border-radius: 12px;
-  }
+  /* Show mobile controls cell in stats bar */
+  .mob-controls-cell { display: flex; }
 
-  /* Stats bar: shrink padding */
-  .stat { padding: 8px 14px; }
+  /* Show mobile popover panel (visibility controlled by .open class) */
+  #mob-panel { display: flex; }
 
+  /* Stats bar adjustments */
+  .stat { padding: 8px 12px; }
   .stat-val { font-size: 13px; }
-
   #force-bar-wrap { width: 44px; }
 
   #stats-bar {
@@ -262,19 +328,14 @@ canvas {
   }
 }
 
-  /* RESPONSIVE — SMALL PHONE  (≤ 420px) */
+/* RESPONSIVE SMALL PHONE (≤ 420px) */
 @media (max-width: 420px) {
-  .stat { padding: 8px 10px; }
+  .stat { padding: 8px 9px; }
   .stat-label { font-size: 8px; }
   .stat-val { font-size: 12px; }
   .stat-unit { font-size: 7px; }
   #force-bar-wrap { width: 36px; }
+  .mob-controls-cell { padding: 0 10px; }
 
-  #controls {
-    bottom: 88px;
-    right: 10px;
-    gap: 6px;
-  }
-
-  .ctrl-btn { width: 40px; height: 40px; font-size: 15px; }
+  #mob-panel { bottom: 78px; }
 }

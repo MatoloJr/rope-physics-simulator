@@ -17,21 +17,22 @@
 <div id="top-label">Verlet Integration · <span>Rope Sim</span></div>
 
 <div id="tip">
-    <span class="tip-mouse">
-      move mouse to attract ropes<br>
-      click to scatter burst<br>
-      R to reset
-    </span>
-    <span class="tip-touch">
-      drag to attract ropes<br>
-      tap to scatter burst
-    </span>
-  </div>
+  <span class="tip-mouse">
+    move mouse to attract ropes<br>
+    click to scatter burst<br>
+    R to reset
+  </span>
+  <span class="tip-touch">
+    drag to attract ropes<br>
+    tap to scatter burst
+  </span>
+</div>
 
 <div id="canvas-wrap">
   <canvas id="c"></canvas>
 </div>
 
+<!-- Desktop sidebar controls (hidden on mobile) -->
 <div id="controls">
   <button class="ctrl-btn" id="btn-gravity" title="Toggle gravity">↓</button>
   <button class="ctrl-btn active" id="btn-mouse" title="Toggle mouse force">⊙</button>
@@ -39,6 +40,7 @@
   <button class="ctrl-btn" id="btn-reset" title="Reset">↺</button>
 </div>
 
+<!-- Stats bar (always visible) -->
 <div id="stats-bar">
   <div class="stat">
     <span class="stat-label">nodes</span>
@@ -58,7 +60,27 @@
     <span class="stat-unit" id="st-unit">px/r</span>
     <div id="force-bar-wrap"><div id="force-bar-fill"></div></div>
   </div>
+
+  <!-- Mobile-only: dot-grid toggle button -->
+  <div class="stat mob-controls-cell">
+    <button id="mob-toggle" title="Controls" aria-label="Toggle controls">
+      <span class="dot-grid">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </span>
+    </button>
+  </div>
 </div>
+
+<!-- Mobile controls popover (anchored above stats bar) -->
+<div id="mob-panel">
+  <button class="ctrl-btn" id="mob-btn-gravity" title="Toggle gravity">↓</button>
+  <button class="ctrl-btn active" id="mob-btn-mouse" title="Toggle mouse force">⊙</button>
+  <button class="ctrl-btn" id="mob-btn-wind" title="Toggle wind">≋</button>
+  <button class="ctrl-btn" id="mob-btn-reset" title="Reset">↺</button>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
