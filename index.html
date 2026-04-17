@@ -17,10 +17,16 @@
 <div id="top-label">Verlet Integration · <span>Rope Sim</span></div>
 
 <div id="tip">
-  move mouse to attract ropes<br>
-  click to scatter burst<br>
-  R to reset
-</div>
+    <span class="tip-mouse">
+      move mouse to attract ropes<br>
+      click to scatter burst<br>
+      R to reset
+    </span>
+    <span class="tip-touch">
+      drag to attract ropes<br>
+      tap to scatter burst
+    </span>
+  </div>
 
 <div id="canvas-wrap">
   <canvas id="c"></canvas>
@@ -49,6 +55,7 @@
   <div class="stat">
     <span class="stat-label">force</span>
     <span class="stat-val" id="st-force">0.00</span>
+    <span class="stat-unit" id="st-unit">px/r</span>
     <div id="force-bar-wrap"><div id="force-bar-fill"></div></div>
   </div>
 </div>

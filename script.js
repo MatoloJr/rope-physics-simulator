@@ -1,29 +1,48 @@
-//  UTILITIES
+//  VEC2 2D vector utility
 class Vec2 {
   constructor(x = 0, y = 0) { this.x = x; this.y = y; }
-  setXY(x, y) { this.x = x; this.y = y; return this; }
-  add(v) { this.x += v.x; this.y += v.y; return this; }
-  sub(v) { this.x -= v.x; this.y -= v.y; return this; }
-  mult(s) { this.x *= s; this.y *= s; return this; }
-  clone() { return new Vec2(this.x, this.y); }
-  static sub(a, b) { return new Vec2(a.x - b.x, a.y - b.y); }
-  static dist(a, b) { const dx = a.x-b.x, dy = a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+
+  setXY(x, y)  { this.x = x; this.y = y; return this; }
+  add(v)       { this.x += v.x; this.y += v.y; return this; }
+  sub(v)       { this.x -= v.x; this.y -= v.y; return this; }
+  mult(s)      { this.x *= s;   this.y *= s;   return this; }
+  clone()      { return new Vec2(this.x, this.y); }
+
+  static sub(a, b)  { return new Vec2(a.x - b.x, a.y - b.y); }
+  static dist(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
 }
 
-//  POINT (particle)
+//  POINT single Verlet particle
 class Point {
   constructor(x, y, pinned = false) {
-    this.pos    = new Vec2(x, y);
-    this.oldPos = new Vec2(x, y);
-    this.pinned = pinned;
-    this.friction = 0.982;
-    this.gravity  = new Vec2(0, 0.38);
+    this.pos     = new Vec2(x, y);
+    this.oldPos  = new Vec2(x, y);
+    this.pinned  = pinned;
+    this.friction = 0.984;
+    this.gravity  = new Vec2(0, 0.36);
   }
 
+  /**
+   * Verlet integration step.
+   *
+   * Force calculation (dimensionless, 0 – 1):
+   *   force = max( (R – d) / R, 0 )
+   *
+   *   where:
+   *     R  = mouse.radius  (influence zone in screen pixels)
+   *     d  = Euclidean distance from node to pointer (pixels)
+   *
+   *   Unit interpretation: "px/r" the fraction of the radius
+   *   the node sits inside (0 = at boundary, 1 = at centre).
+   *   Values above 0.6 trigger a direct snap to the pointer.
+   */
   update(mouse, useGravity, useMouseForce, wind) {
     if (this.pinned) return;
 
-    // Verlet: derive velocity from displacement
+    // Velocity derived implicitly from position history
     let vel = Vec2.sub(this.pos, this.oldPos);
     this.oldPos.setXY(this.pos.x, this.pos.y);
 
@@ -31,14 +50,20 @@ class Point {
     if (useGravity) vel.add(this.gravity);
     if (wind !== 0) vel.add(new Vec2(wind, 0));
 
-    // Mouse interaction
+    // Pointer (mouse / touch) attraction
     if (useMouseForce && mouse.active) {
-      let { x: dx, y: dy } = Vec2.sub(mouse.pos, this.pos);
+      const dx   = mouse.pos.x - this.pos.x;
+      const dy   = mouse.pos.y - this.pos.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+
+      // Normalised direction vector toward pointer
       const direction = new Vec2(dx / dist, dy / dist);
+
+      // Proximity-based force scalar  (unit: px/r see JSDoc above)
       const force = Math.max((mouse.radius - dist) / mouse.radius, 0);
 
       if (force > 0.6) {
+        // Strong pull: snap node directly to pointer
         this.pos.setXY(mouse.pos.x, mouse.pos.y);
       } else {
         this.pos.add(vel);
@@ -49,47 +74,59 @@ class Point {
     }
   }
 
+  // Keep nodes within canvas bounds
   constrain(w, h) {
-    if (this.pos.x < 0)  { this.pos.x = 0;  this.oldPos.x = this.pos.x + (this.pos.x - this.oldPos.x) * -0.5; }
-    if (this.pos.x > w)  { this.pos.x = w;  this.oldPos.x = this.pos.x + (this.pos.x - this.oldPos.x) * -0.5; }
-    if (this.pos.y > h)  { this.pos.y = h;  this.oldPos.y = this.pos.y + (this.pos.y - this.oldPos.y) * -0.5; }
+    if (this.pos.x < 0) {
+      this.pos.x = 0;
+      this.oldPos.x = this.pos.x + (this.pos.x - this.oldPos.x) * -0.5;
+    }
+    if (this.pos.x > w) {
+      this.pos.x = w;
+      this.oldPos.x = this.pos.x + (this.pos.x - this.oldPos.x) * -0.5;
+    }
+    if (this.pos.y > h) {
+      this.pos.y = h;
+      this.oldPos.y = this.pos.y + (this.pos.y - this.oldPos.y) * -0.5;
+    }
   }
 }
 
-//  STICK (distance constraint)
+//  STICK rigid distance constraint between two Points
 class Stick {
   constructor(p0, p1) {
-    this.p0 = p0;
-    this.p1 = p1;
+    this.p0     = p0;
+    this.p1     = p1;
     this.length = Vec2.dist(p0.pos, p1.pos);
   }
 
   solve() {
-    const dx = this.p1.pos.x - this.p0.pos.x;
-    const dy = this.p1.pos.y - this.p0.pos.y;
+    const dx   = this.p1.pos.x - this.p0.pos.x;
+    const dy   = this.p1.pos.y - this.p0.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
     const diff = (dist - this.length) / dist * 0.5;
-    const ox = dx * diff;
-    const oy = dy * diff;
+    const ox   = dx * diff;
+    const oy   = dy * diff;
 
     if (!this.p0.pinned) { this.p0.pos.x += ox; this.p0.pos.y += oy; }
     if (!this.p1.pinned) { this.p1.pos.x -= ox; this.p1.pos.y -= oy; }
   }
 }
 
-//  ROPE
+//  ROPE chain of Points connected by Sticks
 class Rope {
-  constructor(x, canvasH, segments, segLen) {
+  constructor(x, segments, segLen) {
     this.points = [];
     this.sticks = [];
 
     for (let i = 0; i <= segments; i++) {
       const pinned = i === 0;
       const p = new Point(x, i * segLen, pinned);
-      // slight random offset so ropes don't overlap perfectly
+
+      // Slight horizontal jitter so ropes don't stack perfectly
       if (!pinned) {
-        p.oldPos.x += (Math.random() - 0.5) * 2;
-        p.pos.x    += (Math.random() - 0.5) * 2;
+        const jitter = (Math.random() - 0.5) * 3;
+        p.pos.x    += jitter;
+        p.oldPos.x += jitter;
       }
       this.points.push(p);
     }
@@ -100,8 +137,12 @@ class Rope {
   }
 
   update(mouse, useGravity, useMouseForce, wind, W, H) {
-    for (const p of this.points) p.update(mouse, useGravity, useMouseForce, wind);
-    const ITERS = 5;
+    for (const p of this.points) {
+      p.update(mouse, useGravity, useMouseForce, wind);
+    }
+
+    // Iterative constraint solving (more iterations = stiffer rope)
+    const ITERS = 6;
     for (let i = 0; i < ITERS; i++) {
       for (const s of this.sticks) s.solve();
       for (const p of this.points) p.constrain(W, H);
@@ -110,7 +151,8 @@ class Rope {
 
   draw(ctx) {
     const pts = this.points;
-    // rope line
+
+    // Rope line
     ctx.beginPath();
     ctx.moveTo(pts[0].pos.x, pts[0].pos.y);
     for (let i = 1; i < pts.length; i++) {
@@ -118,18 +160,18 @@ class Rope {
     }
     ctx.stroke();
 
-    // end node glow
+    // Glowing tip node
     const tip = pts[pts.length - 1].pos;
-    const grd = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, 7);
-    grd.addColorStop(0, 'rgba(212,175,106,0.95)');
-    grd.addColorStop(0.5, 'rgba(212,175,106,0.35)');
-    grd.addColorStop(1, 'rgba(212,175,106,0)');
+    const grd = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, 8);
+    grd.addColorStop(0,   'rgba(212,175,106,0.95)');
+    grd.addColorStop(0.5, 'rgba(212,175,106,0.30)');
+    grd.addColorStop(1,   'rgba(212,175,106,0)');
     ctx.fillStyle = grd;
     ctx.beginPath();
-    ctx.arc(tip.x, tip.y, 7, 0, Math.PI * 2);
+    ctx.arc(tip.x, tip.y, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // solid dot
+    // Solid inner dot
     ctx.fillStyle = '#d4af6a';
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, 2.5, 0, Math.PI * 2);
@@ -137,163 +179,252 @@ class Rope {
   }
 }
 
-//  SCENE SETUP
+//  SCENE CONFIG
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
-let W, H, simH, ropes = [];
-const ROPE_COUNT   = 34;
-const SEG_LEN      = 18;
-const SEG_COUNT    = 14;
+// Rope parameters segments × segLen determines total rope length
+// Longer ropes: 26 segments × 28px = 728px max hang
+const ROPE_COUNT_DESKTOP = 34;
+const ROPE_COUNT_MOBILE  = 20;   // fewer ropes on small screens for perf
+const SEG_LEN            = 28;   // pixels per segment (increased from 18)
+const SEG_COUNT          = 26;   // segments per rope  (increased from 14)
 
-let mouse = { pos: new Vec2(-999, -999), radius: 120, active: false };
+let W, H, ropes  = [];
+let ROPE_COUNT   = ROPE_COUNT_DESKTOP;
+
+// Pointer state shared between mouse and touch
+let pointer = {
+  pos:    new Vec2(-9999, -9999),
+  radius: 130,   // influence zone radius in screen pixels
+  active: false
+};
+
 let useGravity    = true;
 let useMouseForce = true;
-let wind = 0, windTarget = 0;
+let wind          = 0;
+let windTarget    = 0;
+let isTouchDevice = false;
 
+//  BUILD / RESIZE
 function buildRopes() {
   ropes = [];
+  ROPE_COUNT = window.innerWidth <= 768 ? ROPE_COUNT_MOBILE : ROPE_COUNT_DESKTOP;
+
   for (let i = 0; i < ROPE_COUNT; i++) {
     const x = (i / (ROPE_COUNT - 1)) * W;
-    ropes.push(new Rope(x, simH, SEG_COUNT, SEG_LEN));
+    ropes.push(new Rope(x, SEG_COUNT, SEG_LEN));
   }
 }
 
 function resize() {
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  simH = H;
   buildRopes();
 }
 
 window.addEventListener('resize', resize);
 resize();
 
-// Mouse / touch
-function updateMouse(x, y) {
-  // only canvas area
-  const active = y < simH;
-  mouse.pos.setXY(x, y);
-  mouse.active = active;
-}
+//  MOUSE EVENTS
+const cursorEl     = document.getElementById('cursor');
+const cursorRingEl = document.getElementById('cursor-ring');
 
 window.addEventListener('mousemove', e => {
-  updateMouse(e.clientX, e.clientY);
-  document.getElementById('cursor').style.left = e.clientX + 'px';
-  document.getElementById('cursor').style.top  = e.clientY + 'px';
-  document.getElementById('cursor-ring').style.left = e.clientX + 'px';
-  document.getElementById('cursor-ring').style.top  = e.clientY + 'px';
-  // scale ring to match mouse radius
-  const r = mouse.radius;
-  document.getElementById('cursor-ring').style.width  = r * 2 + 'px';
-  document.getElementById('cursor-ring').style.height = r * 2 + 'px';
+  if (isTouchDevice) return;
+
+  pointer.pos.setXY(e.clientX, e.clientY);
+  pointer.active = true;
+
+  cursorEl.style.left = e.clientX + 'px';
+  cursorEl.style.top  = e.clientY + 'px';
+
+  cursorRingEl.style.left   = e.clientX + 'px';
+  cursorRingEl.style.top    = e.clientY + 'px';
+  cursorRingEl.style.width  = pointer.radius * 2 + 'px';
+  cursorRingEl.style.height = pointer.radius * 2 + 'px';
 });
 
+window.addEventListener('mouseleave', () => {
+  pointer.active = false;
+});
+
+// Click = scatter burst
 window.addEventListener('click', e => {
-  // scatter burst on click
-  const cx = e.clientX, cy = e.clientY;
-  for (const rope of ropes) {
-    for (const p of rope.points) {
-      if (p.pinned) continue;
-      const dx = p.pos.x - cx, dy = p.pos.y - cy;
-      const dist = Math.sqrt(dx*dx+dy*dy) || 1;
-      if (dist < 200) {
-        const f = (200 - dist) / 200 * 18;
-        p.oldPos.x = p.pos.x + (dx/dist) * -f;
-        p.oldPos.y = p.pos.y + (dy/dist) * -f;
-      }
-    }
-  }
+  if (isTouchDevice) return;
+  scatterBurst(e.clientX, e.clientY);
 });
 
 window.addEventListener('keydown', e => {
   if (e.key === 'r' || e.key === 'R') buildRopes();
 });
 
-// Controls
-document.getElementById('btn-gravity').addEventListener('click', function() {
+//  TOUCH EVENTS
+
+/**
+ * Touch translates directly to the shared pointer object
+ * so the same Verlet force logic applies unchanged.
+ * Multi-touch: we only track the first active touch.
+ */
+function getTouchPos(touch) {
+  // clientX/Y gives CSS pixel coords (correct even on HiDPI)
+  return { x: touch.clientX, y: touch.clientY };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  isTouchDevice = true;
+  const t = e.touches[0];
+  const { x, y } = getTouchPos(t);
+  pointer.pos.setXY(x, y);
+  pointer.active = true;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const { x, y } = getTouchPos(t);
+  pointer.pos.setXY(x, y);
+  pointer.active = true;
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    // Finger lifted fire scatter burst at last position, then deactivate
+    scatterBurst(pointer.pos.x, pointer.pos.y);
+    pointer.active = false;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', () => {
+  pointer.active = false;
+}, { passive: true });
+
+//  SCATTER BURST (shared by click & tap)
+function scatterBurst(cx, cy) {
+  const BURST_RADIUS = 220;
+  const BURST_FORCE  = 20;
+
+  for (const rope of ropes) {
+    for (const p of rope.points) {
+      if (p.pinned) continue;
+      const dx   = p.pos.x - cx;
+      const dy   = p.pos.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (dist < BURST_RADIUS) {
+        const f = (BURST_RADIUS - dist) / BURST_RADIUS * BURST_FORCE;
+        p.oldPos.x = p.pos.x + (dx / dist) * -f;
+        p.oldPos.y = p.pos.y + (dy / dist) * -f;
+      }
+    }
+  }
+}
+
+//  CONTROLS
+document.getElementById('btn-gravity').addEventListener('click', function () {
   useGravity = !useGravity;
   this.classList.toggle('active', useGravity);
 });
-document.getElementById('btn-mouse').addEventListener('click', function() {
+
+document.getElementById('btn-mouse').addEventListener('click', function () {
   useMouseForce = !useMouseForce;
   this.classList.toggle('active', useMouseForce);
 });
-document.getElementById('btn-wind').addEventListener('click', function() {
-  windTarget = windTarget === 0 ? 0.6 : 0;
+
+document.getElementById('btn-wind').addEventListener('click', function () {
+  windTarget = windTarget === 0 ? 0.55 : 0;
   this.classList.toggle('active', windTarget !== 0);
 });
+
 document.getElementById('btn-reset').addEventListener('click', () => buildRopes());
 
-// initial active state
+// Set initial active states
 document.getElementById('btn-gravity').classList.toggle('active', useGravity);
+document.getElementById('btn-mouse').classList.toggle('active', useMouseForce);
 
-//  DRAW LOOP
-let lastTime = 0, fps = 60, currentForce = 0;
+//  RENDER LOOP
+let lastTime     = 0;
+let fps          = 60;
+let currentForce = 0;   // smoothed peak force this frame (unit: px/r, 0–1)
+
 function frame(ts) {
-  const dt = ts - lastTime;
+  const dt = ts - lastTime || 16;
   lastTime = ts;
-  fps = fps * 0.9 + (1000 / dt) * 0.1;
 
-  wind += (windTarget - wind) * 0.02;
+  // Exponential moving average for stable FPS readout
+  fps = fps * 0.92 + (1000 / dt) * 0.08;
 
-  // compute current mouse force on nearest node
+  // Smoothly ramp wind
+  wind += (windTarget - wind) * 0.018;
+
+  // Compute peak force this frame
+  // Force formula:  f = max( (R – d) / R, 0 )
+  // Unit: px/r  (dimensionless proximity fraction, 0 = edge, 1 = centre)
   let maxForce = 0;
-  if (mouse.active && useMouseForce) {
+  if (pointer.active && useMouseForce) {
     for (const rope of ropes) {
       for (const p of rope.points) {
         if (p.pinned) continue;
-        const dx = mouse.pos.x - p.pos.x;
-        const dy = mouse.pos.y - p.pos.y;
-        const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
-        const f = Math.max((mouse.radius - dist) / mouse.radius, 0);
+        const dx   = pointer.pos.x - p.pos.x;
+        const dy   = pointer.pos.y - p.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const f    = Math.max((pointer.radius - dist) / pointer.radius, 0);
         if (f > maxForce) maxForce = f;
       }
     }
   }
-  currentForce = currentForce * 0.85 + maxForce * 0.15;
+  // Smooth the displayed value so it doesn't jitter
+  currentForce = currentForce * 0.82 + maxForce * 0.18;
 
+  // Draw
   ctx.clearRect(0, 0, W, H);
 
-  // subtle top gradient
-  const bg = ctx.createLinearGradient(0, 0, 0, simH);
-  bg.addColorStop(0, 'rgba(15,15,20,0.6)');
+  // Subtle top vignette
+  const bg = ctx.createLinearGradient(0, 0, 0, H * 0.45);
+  bg.addColorStop(0, 'rgba(14,14,18,0.55)');
   bg.addColorStop(1, 'rgba(13,13,15,0)');
   ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, simH);
+  ctx.fillRect(0, 0, W, H);
 
-  // rope style
-  ctx.strokeStyle = 'rgba(220,215,200,0.6)';
-  ctx.lineWidth   = 1.1;
+  // Rope render style
+  ctx.strokeStyle = 'rgba(220,215,200,0.62)';
+  ctx.lineWidth   = 1.15;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
 
   for (const rope of ropes) {
-    rope.update(mouse, useGravity, useMouseForce, wind, W, simH);
+    rope.update(pointer, useGravity, useMouseForce, wind, W, H);
     rope.draw(ctx);
   }
 
-  // mouse circle hint (only in sim area)
-  if (mouse.active) {
+  // Influence-zone ring around pointer
+  if (pointer.active) {
     ctx.beginPath();
-    ctx.arc(mouse.pos.x, mouse.pos.y, mouse.radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(200,168,75,0.12)';
-    ctx.lineWidth = 1;
+    ctx.arc(pointer.pos.x, pointer.pos.y, pointer.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(200,168,75,0.11)';
+    ctx.lineWidth   = 1;
     ctx.stroke();
   }
 
-  // stats
+  // Update HUD
   document.getElementById('st-nodes').textContent = ROPE_COUNT * (SEG_COUNT + 1);
   document.getElementById('st-ropes').textContent = ROPE_COUNT;
   document.getElementById('st-fps').textContent   = Math.round(fps);
+
+  // Force: displayed as normalised scalar (0.00 – 1.00, unit = px/r)
   document.getElementById('st-force').textContent = currentForce.toFixed(2);
-  const pct = Math.min(currentForce * 100, 100);
+
+  // Force bar
+  const pct  = Math.min(currentForce * 100, 100);
   const fill = document.getElementById('force-bar-fill');
   fill.style.width = pct + '%';
+  // Bar turns red above the snap threshold (0.6)
   fill.style.background = currentForce > 0.6
-    ? 'linear-gradient(90deg,#e05252,#ff7a7a)'
-    : 'linear-gradient(90deg,#c8a84b,#e8c96a)';
+    ? 'linear-gradient(90deg, #e05252, #ff8080)'
+    : 'linear-gradient(90deg, #c8a84b, #e8c96a)';
 
   requestAnimationFrame(frame);
 }
+
 requestAnimationFrame(frame);
