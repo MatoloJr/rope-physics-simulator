@@ -211,6 +211,9 @@ let useGravity    = true;
 let useMouseForce = true;
 let wind          = 0;
 let windTarget    = 0;
+let windEnabled   = false;   // tracks whether wind toggle is on
+let windPhase     = 0;       // drives smooth bidirectional oscillation
+let windTimer     = 0;       // time accumulator (ms)
 let isTouchDevice = false;
 
 //  BUILD / RESIZE
@@ -336,9 +339,10 @@ document.getElementById('btn-mouse').addEventListener('click', function () {
 });
 
 document.getElementById('btn-wind').addEventListener('click', function () {
-  windTarget = windTarget === 0 ? 0.55 : 0;
-  this.classList.toggle('active', windTarget !== 0);
-  document.getElementById('mob-btn-wind').classList.toggle('active', windTarget !== 0);
+  windEnabled = !windEnabled;
+  if (!windEnabled) { windTarget = 0; }
+  this.classList.toggle('active', windEnabled);
+  document.getElementById('mob-btn-wind').classList.toggle('active', windEnabled);
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => buildRopes());
@@ -378,9 +382,10 @@ document.getElementById('mob-btn-mouse').addEventListener('click', function () {
 });
 
 document.getElementById('mob-btn-wind').addEventListener('click', function () {
-  windTarget = windTarget === 0 ? 0.55 : 0;
-  this.classList.toggle('active', windTarget !== 0);
-  document.getElementById('btn-wind').classList.toggle('active', windTarget !== 0);
+  windEnabled = !windEnabled;
+  if (!windEnabled) { windTarget = 0; }
+  this.classList.toggle('active', windEnabled);
+  document.getElementById('btn-wind').classList.toggle('active', windEnabled);
 });
 
 document.getElementById('mob-btn-reset').addEventListener('click', () => buildRopes());
@@ -399,6 +404,22 @@ function frame(ts) {
   lastTime = ts;
 
   fps = fps * 0.92 + (1000 / dt) * 0.08;
+
+  // Bidirectional wind: smoothly wander target using layered sine waves.
+  // Three frequencies combine to produce a natural, never-looping pattern
+  // that drifts between ~-0.84 and ~+0.84, crossing zero (reversing direction)
+  // organically. Only updates windTarget when wind is enabled; disabling wind
+  // fades windTarget back to 0 so ropes settle without a sudden stop.
+  if (windEnabled) {
+    windTimer += dt;
+    windPhase += dt * 0.00018;                               // slow primary drift
+    const gust = Math.sin(windPhase) * 0.55                  // broad sweep
+               + Math.sin(windPhase * 3.7 + 1.3) * 0.22    // mid gust
+               + Math.sin(windPhase * 11.1 + 2.9) * 0.07;  // flutter
+    windTarget = gust;
+  }
+
+  // Lerp actual wind toward target provides smooth inertia on direction changes
   wind += (windTarget - wind) * 0.018;
 
   let maxForce = 0;
